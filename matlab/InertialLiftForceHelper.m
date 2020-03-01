@@ -239,7 +239,7 @@ classdef InertialLiftForceHelper
         function V = migration_velocity(obj,r,z)
             % Get the migration velocity for a neutrally buoyant
             % spherical particle centred at (r,z) within the cross-section
-            % (non-dimensionalised via U_m a / H )
+            % (non-dimensionalised via ( \rho / \mu ) U_m^2 a^3 / H^2 )
             V = [obj.Fr_RBS(r,z)/obj.Cr_RBS(r,z), ...
                  obj.Fz_RBS(r,z)/obj.Cz_RBS(r,z)];
         end
@@ -252,7 +252,7 @@ classdef InertialLiftForceHelper
         function S = secondary_flow_drag(obj,r,z)
             % Get the drag coefficients in the r,z directions of a neutrally buoyant
             % spherical particle centred at (r,z) within the cross-section
-            % (non-dimensionalised via \rho U_m^2 a^4 / H^2 )
+            % (non-dimensionalised via \rho U_m^2 a H^2 / ( 4 R ) )
             S = [obj.Sr_RBS(r,z),obj.Sz_RBS(r,z)];
         end
         function Up = axial_velocity(obj,r,z)

@@ -178,10 +178,16 @@ class InertialLiftForceHelper(object):
         spherical particle centred at (r,z) within the cross-section
         (non-dimensionalised via rho U_m^2 a^4 / H^2 )"""
         return np.squeeze([self._Fr_RBS(r,z),self._Fz_RBS(r,z)])
+    def migration_force_jacobian(self,r,z):
+        """Get the jacobian of the (net) migration force for a neutrally 
+        buoyant spherical particle centred at (r,z) within the 
+        cross-section (non-dimensionalised via rho U_m^2 a^3 / H^2 )"""
+        return np.squeeze([[self._Fr_RBS(r,z,dx=1),self._Fr_RBS(r,z,dy=1)],
+                           [self._Fz_RBS(r,z,dx=1),self._Fz_RBS(r,z,dy=1)]])
     def migration_velocity(self,r,z):
         """Get the migration velocity for a neutrally buoyant
         spherical particle centred at (r,z) within the cross-section
-        (non-dimensionalised via U_m a / H )"""
+        (non-dimensionalised via ( rho / mu ) U_m^2 a^3 / H^2 )"""
         return np.squeeze([self._Fr_RBS(r,z)/self._Cr_RBS(r,z),
                            self._Fz_RBS(r,z)/self._Cz_RBS(r,z)])
     def drag_coefficient(self,r,z):
@@ -192,7 +198,7 @@ class InertialLiftForceHelper(object):
     def secondary_flow_drag(self,r,z):
         """Get the drag coefficients in the r,z directions of a neutrally buoyant
         spherical particle centred at (r,z) within the cross-section
-        (non-dimensionalised via rho U_m^2 a^4 / H^2 )"""
+        (non-dimensionalised via rho U_m^2 a H^2 / ( 4 R ) )"""
         return np.squeeze([self._Sr_RBS(r,z),self._Sz_RBS(r,z)])
     def axial_velocity(self,r,z):
         """Get the terminal/steady axial velocity of a neutrally buoyant 
