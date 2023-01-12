@@ -31,6 +31,8 @@ class MDNInertialMigrationHelper(object):
         i.e. read a as 2a/H=alpha and R as 2R/H=1/epsilon (H being the duct height).
         The aspect argument specifies cross-section aspect ratio,
         which can be 2 or 4 and indicates the width as a multiple of the height.
+        The Dean number is K=Re^2*epsilon where Re=(rho/mu)*U_m*(H/2) is the channel
+        Reynolds number (with U_m being the maximum axial fluid velocity).
         (Data for additional aspect ratios may be added in the future)
         """
         self._alpha = a # equivalent to alpha
@@ -76,9 +78,9 @@ class MDNInertialMigrationHelper(object):
             raise ValueError("The requested bend radius R is non-physical. Choose R>{:d}".format(self._aspect)+
                              "(ideally R>>{:d}) where R is interpreted to be relative".format(self._aspect)+
                              "to half the duct height, i.e. read R as 2R/H")
-        if self._R<20.0 or self._R>1280.0:
-            print("Warning: Results may be innacurate for the given bend radius, \n"+
-                  "\t(20<=R<=1280 is best, where R should be read as 2R/H)")
+        if self._R<20.0:
+            print("Warning: Results may be innacurate for small bend radii, \n"+
+                  "\t(R>=20 is best, where R should be read as 2R/H)")
         if self._eps in self._eps_values:
             # use the respective raw data as is
             ei = np.where((self._eps_values==self._eps))[0][0]
@@ -224,7 +226,8 @@ class MDNInertialMigrationHelper(object):
     def get_bounds(self):
         """Get the bounds of the current (dimensionless) cross-section
         (given in the form [r_min,r_max,z_min,z_max])"""
-        return [-self._aspect/self._a,self._aspect/self._a,-1.0/self._a,1.0/self._a]
+        return [-self._aspect/self._alpha,self._aspect/self._alpha,\
+                -1.0/self._alpha,1.0/self._alpha]
     def get_particle_bounds(self):
         """Get the bounds for the particle centre in the current (dimensionless)
         cross-section (given in the form [r_min,r_max,z_min,z_max])"""
@@ -240,13 +243,14 @@ class MDNInertialMigrationHelper(object):
         self._setup_interpolants()
         return
     def get_available_alpha(self):
-        """Get a list of available particle radii"""
+        """Get a list of available (relative) particle radii"""
         return self._raw_data['alphas']
     def get_alpha(self):
-        """Get the current particle radius"""
+        """Get the current (relative) particle radius"""
         return self._alpha
     def set_alpha(self,a):
-        """Change the particle radius (and update the interpolants)"""
+        """Change the (relative) particle radius
+        (and update the interpolants)"""
         self._alpha = a
         self._update_alpha_data()
         self._update_eps_data()
@@ -254,28 +258,30 @@ class MDNInertialMigrationHelper(object):
         self._setup_interpolants()
         return
     def get_R(self):
-        """Get the current bend radius"""
+        """Get the current (relative) bend radius"""
         return self._R
     def set_R(self,R):
-        """Change the bend radius of the duct (and update the interpolants)"""
+        """Change the (relative) bend radius of the duct
+        (and update the interpolants)"""
         self._R = R
         self._eps = 1./self._R
         self._update_eps_data()
         self._update_K_data()
         self._setup_interpolants()
     def get_K(self):
-        """Get the current Dean number K=eps*Re^2"""
+        """Get the current Dean number K=epsilon*Re^2"""
         return self._K
     def get_Re(self):
-        """Get the current (channel) Reynolds number Re=(rho/mu)*U*(H/2)
-        (with U the maximum axial velocity and H the duct height)"""
+        """Get the current (channel) Reynolds number Re=(rho/mu)*U_m*(H/2)
+        (with U_m the maximum axial velocity and H the duct height)"""
         return (self._K/self._eps)**0.5
     def get_Rep(self):
-        """Get the current particle Reynolds number Re_p=Re*alpha^2
+        """Get the current particle Reynolds number Re_p=0.5*Re*alpha^2
         (with U the maximum axial velocity and H the duct height)"""
-        return (0.5*self._alpha)**2*(self._K/self._eps)**0.5
+        return 0.5*self._alpha**2*(self._K/self._eps)**0.5
     def set_K(self,K):
-        """Change the dean number"""
+        """Change the Dean number K=epsilon*Re^2
+        (and update the interpolants)"""
         self._K = K
         self._update_K_data()
         self._setup_interpolants()
