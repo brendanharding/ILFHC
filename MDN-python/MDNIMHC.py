@@ -18,7 +18,7 @@ class MDNInertialMigrationHelper(object):
     'MDN_data/rect_4x1_MDN_data.npz'
     to be located relative to the working directory.
     
-    Please ensure you cite our JFM paper (TODO: add DOI once provided)
+    Please ensure you cite our JFM paper (TODO: add DOI once assigned)
     if you use this code/data. This code is provided under an MIT license 
     (see https://opensource.org/licenses/MIT). However, I would appreciate it
     if you contact me and to let me know if you use this code/data.
@@ -62,7 +62,7 @@ class MDNInertialMigrationHelper(object):
         if len(ai)==0:
             raise ValueError('The desired particle size is not present in the raw data. '+\
                              'Check what is available with the method get_available_a().')
-        
+        ai = ai[0]
         self._eps_values = self._raw_data['epss'][ai]
         self._alpha_data = self._raw_data['alpha_data'+str(ai)]
         Rs = self._alpha_data[0,:,:,0] # assume samples are same for all eps values
@@ -91,7 +91,7 @@ class MDNInertialMigrationHelper(object):
         return
     def _update_K_data(self):
         """Updates the forces based on the current value of K"""
-        cc-ignore = False
+        cc_ignore = False
         pre_inverted = True
         K = self._K
         eps = self._eps
@@ -99,6 +99,7 @@ class MDNInertialMigrationHelper(object):
         sfs = (K*eps)**0.5 # secondary flow scale
         Lda = 2./alpha
         nt = 6
+        rho_p = 1.0
         # Unpack and reshape the data
         Rs = self._eps_data[:,:,0]
         Zs = self._eps_data[:,:,1]
@@ -121,21 +122,21 @@ class MDNInertialMigrationHelper(object):
         if cc_ignore:
             UW1 = np.zeros(Rs.shape+(6,))
         else:
-            UW1 = np.empty((SX.shape[0],SX.shape[1],6))
+            UW1 = np.empty(Rs.shape+(6,))
             UW1[:,:,1] = +2*(rho_p*4.0/ 3.0*np.pi)*UxUzWy0[:,:,0]*Theta0
             UW1[:,:,3] = -  (rho_p*8.0/15.0*np.pi)*UxUzWy0[:,:,2]*Theta0
             UW1[:,:,0] = -(rho_p*4.0/ 3.0*np.pi)*Theta0*UyWxWz0[:,:,0]
             UW1[:,:,4] = +(rho_p*8.0/15.0*np.pi)*UyWxWz0[:,:,1]*Theta0
             UW1[:,:,[2,5]] = 0
             if pre_inverted:
-                UW1[:,:,1::2] = np.linalg.solve(-Aa,UW1[:,:,1::2])
-                UW1[:,:,0::2] = np.linalg.solve(-As,UW1[:,:,0::2])
+                UW1[:,:,1::2] = np.linalg.solve(-self._Aa,UW1[:,:,1::2])
+                UW1[:,:,0::2] = np.linalg.solve(-self._As,UW1[:,:,0::2])
             ind = 0
             for i in range(0,nt):
                 for j in range(i,nt):
                     if (i%2)==(j%2):
                         factor = -K**((i//2)+(j//2))
-                        if i%2==1: # i,j are either both even, or both odd, in the subsequent loop
+                        if i%2==1: # i,j are either both even, or both odd here
                             factor *= K*eps # note K*eps=sfs**2
                         UW1[:,:,0::2] += factor*bg_iner[:,:,:,ind]
                     else:
@@ -167,8 +168,8 @@ class MDNInertialMigrationHelper(object):
             UyWxWz1 = UW1[:,:,1::2]
             UxUzWy1 = UW1[:,:,0::2]
         else:
-            UyWxWz1 = np.linalg.solve(-Aa,UW1[:,:,1::2])
-            UxUzWy1 = np.linalg.solve(-As,UW1[:,:,0::2])
+            UyWxWz1 = np.linalg.solve(-self._Aa,UW1[:,:,1::2])
+            UxUzWy1 = np.linalg.solve(-self._As,UW1[:,:,0::2])
         # Lastly, put the data into arrays to be called upon...
         self._UxUzWy0 = UxUzWy0
         self._UyWxWz0 = UyWxWz0
@@ -178,7 +179,7 @@ class MDNInertialMigrationHelper(object):
         return
     def _setup_interpolants(self,include_spin=False):
         """Constructs interpolants of the appropriate fields"""
-        nhH,nhW = 1.0/self._a-1.0,self._aspect/self._a-1.0
+        nhH,nhW = 1.0/self._alpha-1.0,self._aspect/self._alpha-1.0
         bbox = [-nhW,nhW,-nhH,nhH]
         rs,zs = self._rs,self._zs
         self._Ux0_RBS = RBS(rs,zs,self._UxUzWy0[:,:,0], bbox=bbox)
@@ -217,19 +218,6 @@ class MDNInertialMigrationHelper(object):
         #self._Fr_RBS = RBS(rs,zs,self._aR_data[4,:,:]+self._kappa*self._aR_data[6,:,:],bbox=bbox)
         #self._Fz_RBS = RBS(rs,zs,self._aR_data[5,:,:]+self._kappa*self._aR_data[7,:,:],bbox=bbox)
         return
-    def _plot_aR_component(self,ind):
-        """Useful for testing/debugging purposes"""
-        # TODO: requires update
-        RS,ZS = np.meshgrid(self._rs,self._zs,indexing='ij')
-        plt.figure(figsize=(1+3*self._aspect,3))
-        plt.contourf(RS,ZS,self._aR_data[ind,:,:],17)
-        plt.colorbar()
-        nhH,nhW = 1.0/self._a,self._aspect/self._a
-        plt.plot([-nhW+1,nhW-1,nhW-1,-nhW+1,-nhW+1],[-nhH+1,-nhH+1,nhH-1,nhH-1,-nhH+1],'r--')
-        plt.xlim(-nhW,nhW)
-        plt.ylim(-nhH,nhH)
-        plt.gca().set_aspect(1.0)
-        plt.show()
     def get_asepct_ratio(self):
         """Get the current cross-section aspect ratio"""
         return self._aspect
@@ -294,47 +282,67 @@ class MDNInertialMigrationHelper(object):
     def migration_velocity(self,r,z):
         """Get the migration velocity for a neutrally buoyant
         spherical particle centred at (r,z) within the cross-section
-        (non-dimensionalised via U_m a / H, not by
-        ( rho / mu ) U_m^2 a^3 / H^2 as was the case previously)"""
-        return np.squeeze([self._Ur_RBS(r,z),
-                           self._Uz_RBS(r,z)])
+        (non-dimensionalised via U_m a / H consistent with the axial velocity,
+        not by ( rho / mu ) U_m^2 a^3 / H^2 as was the case previously)"""
+        return np.array([self._Ux_RBS.ev(r,z),
+                         self._Uz_RBS.ev(r,z)])
     def axial_velocity(self,r,z):
         """Get the terminal/steady axial velocity of a neutrally buoyant
         spherical particle centred at (r,z) within the cross-section
         (non-dimensionalised via U_m a / H )"""
-        return np.squeeze(self._Uy_RBS(r,z))
+        return self._Uy_RBS.ev(r,z)
     def spin_components(self,r,z):
         """Get the terminal/steady r,z spin components of a neutrally buoyant
         spherical particle centred at (r,z) within the cross-section
         (non-dimensionalised via U_m / H )"""
-        return np.squeeze([self._Wr_RBS(r,z),self._Wz_RBS(r,z)])
+        return np.array([self._Wx_RBS.ev(r,z),self._Wz_RBS.ev(r,z)])
+    def plot_migration_velocity(self):
+        """Produces a rough sketch of the magnitude of the migration velocity including
+        the zero contours of the horizontal and vertical components."""
+        Re = (self._K/self._eps)**0.5
+        Rep = 0.5*Re*self._alpha**2
+        Vr = self._UxUzWy0[:,:,0]+Rep*self._UxUzWy1[:,:,0]
+        Vz = self._UxUzWy0[:,:,1]+Rep*self._UxUzWy1[:,:,1]
+        RS,ZS = np.meshgrid(self._rs,self._zs,indexing='ij')
+        plt.figure(figsize=(1+3*self._aspect,3))
+        plt.contourf(RS,ZS,(Vr**2+Vz**2)**0.5,17)
+        plt.colorbar()
+        plt.contour(RS,ZS,Vr,[0.0],colors=['k'])
+        plt.contour(RS,ZS,Vz,[0.0],colors=['w'])
+        nhH,nhW = 1.0/self._alpha,self._aspect/self._alpha
+        plt.plot([-nhW+1,nhW-1,nhW-1,-nhW+1,-nhW+1],[-nhH+1,-nhH+1,nhH-1,nhH-1,-nhH+1],'r--')
+        plt.xlim(-nhW,nhW)
+        plt.ylim(-nhH,nhH)
+        plt.gca().set_aspect(1.0)
+        plt.show()
+        return
     # TODO: Everything below needs checking/updating
-    def migration_force(self,r,z):
+    def _migration_force(self,r,z):
         raise NotImplementedError # need to multiply Aa,As by the velocity fields
         """Get the (net) migration force for a neutrally buoyant
         spherical particle centred at (r,z) within the cross-section
         (non-dimensionalised via rho U_m^2 a^4 / H^2 )"""
         return np.squeeze([self._Fr_RBS(r,z),self._Fz_RBS(r,z)])
-    def migration_force_jacobian(self,r,z):
+    def _migration_force_jacobian(self,r,z):
         raise NotImplementedError # need to multiply Aa,As by the velocity fields
         """Get the jacobian of the (net) migration force for a neutrally 
         buoyant spherical particle centred at (r,z) within the 
         cross-section (non-dimensionalised via rho U_m^2 a^3 / H^2 )"""
         return np.squeeze([[self._Fr_RBS(r,z,dx=1),self._Fr_RBS(r,z,dy=1)],
                            [self._Fz_RBS(r,z,dx=1),self._Fz_RBS(r,z,dy=1)]])
-    def drag_coefficient(self,r,z):
+    def _drag_coefficient(self,r,z):
         raise NotImplementedError # need to multiply Aa,As by the velocity fields
         """Get the drag coefficients in the r,z directions of a neutrally buoyant
         spherical particle centred at (r,z) within the cross-section
         (non-dimensionalised via mu a )"""
         return np.squeeze([self._Cr_RBS(r,z),self._Cz_RBS(r,z)])
-    def secondary_flow_drag(self,r,z):
+    def _secondary_flow_drag(self,r,z):
         raise NotImplementedError # need to multiply Aa,As by the velocity fields
         """Get the drag coefficients in the r,z directions of a neutrally buoyant
         spherical particle centred at (r,z) within the cross-section
         (non-dimensionalised via rho U_m^2 a H^2 / ( 4 R ) )"""
         return np.squeeze([self._Sr_RBS(r,z),self._Sz_RBS(r,z)])
-    def plot_migration_force(self):
+    def _plot_migration_force(self):
         raise NotImplementedError # need to multiply Aa,As by the velocity fields
         """Produces a rough sketch of the magnitude of the migration force including
         the zero contours of the horizontal and vertical components."""
@@ -346,11 +354,25 @@ class MDNInertialMigrationHelper(object):
         plt.colorbar()
         plt.contour(RS,ZS,Fr,[0.0],colors=['k'])
         plt.contour(RS,ZS,Fz,[0.0],colors=['w'])
-        nhH,nhW = 1.0/self._a,self._aspect/self._a
+        nhH,nhW = 1.0/self._alpha,self._aspect/self._alpha
         plt.plot([-nhW+1,nhW-1,nhW-1,-nhW+1,-nhW+1],[-nhH+1,-nhH+1,nhH-1,nhH-1,-nhH+1],'r--')
         plt.xlim(-nhW,nhW)
         plt.ylim(-nhH,nhH)
         plt.gca().set_aspect(1.0)
         plt.show()
         return
+    def _plot_aR_component(self,ind):
+        raise NotImplementedError
+        """Useful for testing/debugging purposes"""
+        # TODO: requires update
+        RS,ZS = np.meshgrid(self._rs,self._zs,indexing='ij')
+        plt.figure(figsize=(1+3*self._aspect,3))
+        plt.contourf(RS,ZS,self._aR_data[ind,:,:],17)
+        plt.colorbar()
+        nhH,nhW = 1.0/self._alpha,self._aspect/self._alpha
+        plt.plot([-nhW+1,nhW-1,nhW-1,-nhW+1,-nhW+1],[-nhH+1,-nhH+1,nhH-1,nhH-1,-nhH+1],'r--')
+        plt.xlim(-nhW,nhW)
+        plt.ylim(-nhH,nhH)
+        plt.gca().set_aspect(1.0)
+        plt.show()
     # end of class
